@@ -1,0 +1,24 @@
+{
+  "name": "owner",
+  "default": "confirm",
+  "rules": [
+    { "id": "owner-no-rm-root", "tool": "shell.exec", "effect": "deny",
+      "reason": "Destructive command against root or home is always blocked.",
+      "args": { "cmd": { "pattern": ["rm -rf /*", "rm -rf ~*", "*mkfs*"] } }, "allowExtraArgs": true },
+    { "id": "owner-shell-readonly", "tool": "shell.exec", "effect": "allow",
+      "reason": "Read-only commands run without asking.",
+      "args": { "cmd": { "required": true, "pattern": ["ls*", "cat *", "git status*", "git log*", "pwd"] } } },
+    { "id": "owner-email-read", "tool": "email.read", "effect": "allow", "reason": "Owner may read their own inbox.", "allowExtraArgs": true },
+    { "id": "owner-email-send", "tool": "email.send", "effect": "confirm",
+      "reason": "Sending email is externally visible; ask first.",
+      "args": { "to": { "required": true, "deny": ["*@competitor.example"] }, "subject": {}, "body": {} } },
+    { "id": "owner-web", "tool": "web.*", "effect": "allow", "reason": "Web reads are fine.", "allowExtraArgs": true },
+    { "id": "owner-calendar", "tool": "calendar.*", "effect": "allow", "reason": "Owner manages their calendar.", "allowExtraArgs": true },
+    { "id": "owner-pay-hard-limit", "tool": "payments.charge", "effect": "deny",
+      "reason": "Charges over $100 are blocked outright.",
+      "args": { "amountUsd": { "required": true, "min": 100.01 } }, "allowExtraArgs": true },
+    { "id": "owner-pay-cap", "tool": "payments.charge", "effect": "confirm",
+      "reason": "Payments up to $100 need confirmation.",
+      "args": { "amountUsd": { "required": true, "max": 100 }, "merchant": { "required": true } } }
+  ]
+}

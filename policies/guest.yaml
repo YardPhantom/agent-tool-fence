@@ -1,0 +1,27 @@
+# Guest: someone talking to the agent who is NOT its owner.
+name: guest
+default: deny
+rules:
+  - id: guest-web-search
+    tool: web.search
+    effect: allow
+    reason: Public web search exposes nothing private.
+    args:
+      query:
+        required: true
+        maxLength: 200
+  - id: guest-calendar-freebusy
+    tool: calendar.freebusy
+    effect: allow
+    reason: Guests may see busy/free blocks, never event details.
+    args:
+      days:
+        max: 14
+  - id: guest-no-email
+    tool: email.*
+    effect: deny
+    reason: Guests can never read or send the owner's email.
+  - id: guest-no-shell
+    tool: shell.*
+    effect: deny
+    reason: Guests cannot run commands.

@@ -1,0 +1,11 @@
+[
+  { "label": "Web search", "call": { "tool": "web.search", "args": { "query": "best ramen in Vancouver" } } },
+  { "label": "Read inbox", "call": { "tool": "email.read", "args": { "folder": "INBOX", "limit": 10 } } },
+  { "label": "Send email", "call": { "tool": "email.send", "args": { "to": "friend@example.com", "subject": "Hi", "body": "See you at 7" } } },
+  { "label": "Free/busy (7 days)", "call": { "tool": "calendar.freebusy", "args": { "days": 7 } } },
+  { "label": "Free/busy (60 days)", "call": { "tool": "calendar.freebusy", "args": { "days": 60 } } },
+  { "label": "Shell: ls", "call": { "tool": "shell.exec", "args": { "cmd": "ls -la" } } },
+  { "label": "Shell: rm -rf /", "call": { "tool": "shell.exec", "args": { "cmd": "rm -rf /" } } },
+  { "label": "Charge $40", "call": { "tool": "payments.charge", "args": { "amountUsd": 40, "merchant": "Bookstore" } } },
+  { "label": "Charge $900", "call": { "tool": "payments.charge", "args": { "amountUsd": 900, "merchant": "Electronics" } } }
+]

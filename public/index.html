@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>agent-tool-fence demo</title>
+<style>
+:root{--bg:#0f1117;--card:#181b24;--fg:#e6e8ee;--mut:#8a90a2;--ok:#2ecc71;--no:#ff5c5c;--ask:#f5b041;--acc:#7aa2ff}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:24px 32px;border-bottom:1px solid #262a36}h1{margin:0;font-size:22px}header p{margin:4px 0 0;color:var(--mut)}
+main{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:24px 32px}
+.card{background:var(--card);border:1px solid #262a36;border-radius:10px;padding:16px}
+label{display:block;color:var(--mut);font-size:13px;margin:10px 0 4px}
+select,textarea{width:100%;background:#0b0d12;color:var(--fg);border:1px solid #2c3140;border-radius:6px;padding:8px;font:13px ui-monospace,monospace}
+textarea{min-height:140px}#policyText{min-height:380px}
+.seg button{background:#0b0d12;color:var(--fg);border:1px solid #2c3140;padding:6px 14px;cursor:pointer}
+.seg button.on{background:var(--acc);color:#000;border-color:var(--acc)}
+#verdict{font-size:28px;font-weight:700;letter-spacing:1px}.allow{color:var(--ok)}.deny{color:var(--no)}.confirm{color:var(--ask)}
+#reason{color:var(--fg)}#rule{color:var(--mut);font-size:13px}
+footer{padding:16px 32px;color:var(--mut);font-size:13px}a{color:var(--acc)}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>agent-tool-fence</h1><p>Pick a proposed agent tool call, choose who's asking, and see whether the policy allows it — and why.</p></header>
+<main>
+<section class="card">
+  <label>Caller</label>
+  <div class="seg"><button data-p="guest" class="on">guest</button><button data-p="owner">owner</button></div>
+  <label for="sample">Proposed tool call</label><select id="sample"></select>
+  <label for="callText">Call JSON (editable)</label><textarea id="callText"></textarea>
+  <div style="margin-top:16px"><div id="verdict">—</div><div id="reason"></div><div id="rule"></div></div>
+</section>
+<section class="card"><label for="policyText">Active policy (YAML or JSON, editable)</label><textarea id="policyText"></textarea><div id="perr" class="deny"></div></section>
+</main>
+<footer>Built by <a href="https://trevorheshka.com">Trevor Heshka</a> · MIT · <a href="https://github.com/YardPhantom/agent-tool-fence">source</a></footer>
+<script src="fence.js"></script>
+<script>
+const $=s=>document.querySelector(s);const texts={};let who='guest',samples=[];
+async function load(){
+  texts.guest=await (await fetch('policies/guest.yaml')).text();
+  texts.owner=await (await fetch('policies/owner.json')).text();
+  samples=await (await fetch('samples.json')).json();
+  $('#sample').innerHTML=samples.map((s,i)=>`<option value="${i}">${s.label}</option>`).join('');
+  const h=new URLSearchParams(location.hash.slice(1));const si=+(h.get('call')||0);$('#sample').value=si;pick(si);setWho(h.get('as')||'guest');
+}
+function pick(i){$('#callText').value=JSON.stringify(samples[i].call,null,2);run()}
+function setWho(p){who=p;document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.p===p));$('#policyText').value=texts[p];run()}
+function run(){
+  let policy,call;$('#perr').textContent='';
+  try{policy=ToolFence.parsePolicy($('#policyText').value);const e=ToolFence.validatePolicy(policy);if(e.length)throw new Error(e.join('; '))}catch(e){$('#perr').textContent='Policy error: '+e.message;return}
+  try{call=JSON.parse($('#callText').value)}catch(e){$('#verdict').textContent='—';$('#reason').textContent='Call JSON invalid';return}
+  const r=ToolFence.evaluate(policy,call);
+  $('#verdict').textContent=r.decision.toUpperCase();$('#verdict').className=r.decision;
+  $('#reason').textContent=r.reason;$('#rule').textContent=r.rule?'matched rule: '+r.rule:'no rule matched';
+}
+$('#sample').onchange=e=>pick(+e.target.value);$('#callText').oninput=run;
+$('#policyText').oninput=()=>{texts[who]=$('#policyText').value;run()};
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>setWho(b.dataset.p));
+load();
+</script></body></html>

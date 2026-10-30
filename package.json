@@ -1,0 +1,13 @@
+{
+  "name": "agent-tool-fence",
+  "version": "0.1.0",
+  "description": "Allowlist policies (YAML/JSON) that decide whether an AI agent's proposed tool call is allowed, denied, or needs confirmation. Zero dependencies.",
+  "license": "MIT",
+  "author": "Trevor Heshka (https://trevorheshka.com)",
+  "homepage": "https://trevorheshka.com",
+  "repository": "github:YardPhantom/agent-tool-fence",
+  "main": "src/fence.js",
+  "bin": { "agent-tool-fence": "cli.js" },
+  "scripts": { "start": "node server.js", "test": "node --test test/*.test.js", "sync": "cp src/fence.js public/fence.js" },
+  "engines": { "node": ">=18" }
+}
