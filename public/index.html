@@ -13,6 +13,8 @@ textarea{min-height:140px}#policyText{min-height:380px}
 .seg button.on{background:var(--acc);color:#000;border-color:var(--acc)}
 #verdict{font-size:28px;font-weight:700;letter-spacing:1px}.allow{color:var(--ok)}.deny{color:var(--no)}.confirm{color:var(--ask)}
 #reason{color:var(--fg)}#rule{color:var(--mut);font-size:13px}
+button.btn{background:#0b0d12;color:var(--fg);border:1px solid #2c3140;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;margin:8px 6px 0 0}button.btn:hover{border-color:var(--acc)}
+.full{grid-column:1/-1}#audit{width:100%;border-collapse:collapse;font:12px ui-monospace,monospace}#audit td,#audit th{text-align:left;padding:4px 8px;border-bottom:1px solid #262a36;vertical-align:top}#audit th{color:var(--mut);font-weight:500}#auditWrap{max-height:260px;overflow:auto}
 footer{padding:16px 32px;color:var(--mut);font-size:13px}a{color:var(--acc)}
 @media(max-width:900px){main{grid-template-columns:1fr}}
 </style></head><body>
@@ -25,12 +27,19 @@ footer{padding:16px 32px;color:var(--mut);font-size:13px}a{color:var(--acc)}
   <label for="callText">Call JSON (editable)</label><textarea id="callText"></textarea>
   <div style="margin-top:16px"><div id="verdict">—</div><div id="reason"></div><div id="rule"></div></div>
 </section>
-<section class="card"><label for="policyText">Active policy (YAML or JSON, editable)</label><textarea id="policyText"></textarea><div id="perr" class="deny"></div></section>
+<section class="card"><label for="policyText">Active policy (YAML or JSON, editable)</label><textarea id="policyText"></textarea><div id="perr" class="deny"></div>
+  <div><button class="btn" id="importBtn">Import policy…</button><button class="btn" id="exportYaml">Export YAML</button><button class="btn" id="exportJson">Export JSON</button><input type="file" id="importFile" accept=".json,.yaml,.yml,application/json,text/yaml" hidden></div>
+</section>
+<section class="card full"><label>Audit log (this session, in memory)</label>
+  <div id="auditWrap"><table id="audit"><thead><tr><th>#</th><th>time</th><th>policy</th><th>tool</th><th>decision</th><th>rule / reason</th></tr></thead><tbody></tbody></table></div>
+  <button class="btn" id="auditDl">Download audit JSON</button><button class="btn" id="auditClear">Clear</button>
+</section>
 </main>
 <footer>Built by <a href="https://trevorheshka.com">Trevor Heshka</a> · MIT · <a href="https://github.com/YardPhantom/agent-tool-fence">source</a></footer>
 <script src="fence.js"></script>
 <script>
-const $=s=>document.querySelector(s);const texts={};let who='guest',samples=[];
+const $=s=>document.querySelector(s);const audit=ToolFence.createAuditLog();let auditTimer=null;
+const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const texts={};let who='guest',samples=[];
 async function load(){
   texts.guest=await (await fetch('policies/guest.yaml')).text();
   texts.owner=await (await fetch('policies/owner.json')).text();
@@ -47,7 +56,22 @@ function run(){
   const r=ToolFence.evaluate(policy,call);
   $('#verdict').textContent=r.decision.toUpperCase();$('#verdict').className=r.decision;
   $('#reason').textContent=r.reason;$('#rule').textContent=r.rule?'matched rule: '+r.rule:'no rule matched';
+  // Debounce so typing in the editors logs one decision, not one per keystroke.
+  clearTimeout(auditTimer);auditTimer=setTimeout(()=>{audit.record(policy,call,r);renderAudit()},400);
 }
+function renderAudit(){
+  $('#audit tbody').innerHTML=audit.entries().slice().reverse().map(e=>`<tr><td>${e.seq}</td><td>${esc(e.timestamp)}</td><td>${esc(e.policy)}</td><td>${esc(e.tool)}</td><td class="${esc(e.decision)}">${esc(String(e.decision).toUpperCase())}</td><td>${esc(e.rule||'—')} · ${esc(e.reason)}</td></tr>`).join('');
+}
+function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function currentPolicy(){try{const p=ToolFence.parsePolicy($('#policyText').value);const e=ToolFence.validatePolicy(p);if(e.length)throw new Error(e.join('; '));return p}catch(e){$('#perr').textContent='Policy error: '+e.message;return null}}
+function exportPolicy(fmt){const p=currentPolicy();if(p)download(`${p.name||who}.${fmt==='json'?'json':'yaml'}`,ToolFence.serializePolicy(p,fmt),fmt==='json'?'application/json':'text/yaml')}
+$('#exportYaml').onclick=()=>exportPolicy('yaml');$('#exportJson').onclick=()=>exportPolicy('json');
+$('#importBtn').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();e.target.value='';
+  try{const p=ToolFence.parsePolicy(t);const errs=ToolFence.validatePolicy(p);if(errs.length)throw new Error(errs.join('; '));$('#policyText').value=t;texts[who]=t;run()}
+  catch(err){$('#perr').textContent='Import failed ('+f.name+'): '+err.message}};
+$('#auditDl').onclick=()=>download(`tool-fence-audit-${new Date().toISOString().replace(/[:.]/g,'-')}.json`,JSON.stringify(audit.toJSON(),null,2),'application/json');
+$('#auditClear').onclick=()=>{audit.clear();renderAudit()};
 $('#sample').onchange=e=>pick(+e.target.value);$('#callText').oninput=run;
 $('#policyText').oninput=()=>{texts[who]=$('#policyText').value;run()};
 document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>setWho(b.dataset.p));
