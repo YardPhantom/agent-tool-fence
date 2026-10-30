@@ -70,8 +70,10 @@
     const indent = (l) => l.match(/^ */)[0].length;
     function scalar(v) {
       v = v.trim();
+      if (v === '{}') return {};
       if (v.startsWith('[') && v.endsWith(']')) return v.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean).map(scalar);
-      if (/^".*"$|^'.*'$/.test(v)) return v.slice(1, -1);
+      if (/^".*"$/.test(v)) { try { return JSON.parse(v); } catch (e) { return v.slice(1, -1); } }
+      if (/^'.*'$/.test(v)) return v.slice(1, -1);
       if (v === 'true') return true; if (v === 'false') return false; if (v === 'null' || v === '~') return null;
       if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
       return v;
@@ -104,6 +106,72 @@
     return t.startsWith('{') ? JSON.parse(t) : parseYaml(t);
   }
 
-  const api = { evaluate, validatePolicy, parsePolicy, parseYaml, globToRegExp };
+
+  // Serialize a policy object to the YAML subset that parseYaml reads back (round-trip safe).
+  function toYaml(value) {
+    const q = (v) => {
+      if (v === null || v === undefined) return 'null';
+      if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+      const str = String(v);
+      return /^[\w./@*?-][\w ./@*?,-]*$/.test(str) && !/^(true|false|null|~|-?\d+(\.\d+)?)$/.test(str) && !/[ ,]$/.test(str) && !str.includes(',') ? str : JSON.stringify(str);
+    };
+    const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+    const scalarList = (a) => a.every((x) => (!x || typeof x !== 'object') && !/[,\[\]]/.test(String(x)));
+    function emit(v, pad) {
+      const out = [];
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          if (isObj(item)) {
+            const sub = emit(item, pad + '  ');
+            out.push(pad + '- ' + sub[0].trimStart(), ...sub.slice(1));
+          } else out.push(pad + '- ' + q(item));
+        }
+      } else {
+        for (const [k, val] of Object.entries(v)) {
+          if (Array.isArray(val) && scalarList(val)) out.push(`${pad}${k}: [${val.map(q).join(', ')}]`);
+          else if (Array.isArray(val) || isObj(val)) {
+            if ((Array.isArray(val) ? val.length : Object.keys(val).length) === 0) { out.push(`${pad}${k}: ${Array.isArray(val) ? '[]' : '{}'}`); continue; }
+            out.push(`${pad}${k}:`, ...emit(val, pad + '  '));
+          } else out.push(`${pad}${k}: ${q(val)}`);
+        }
+      }
+      return out;
+    }
+    return emit(value, '').join('\n') + '\n';
+  }
+
+  /**
+   * createAuditLog({ now }) -> { record(policy, call, result), entries(), clear(), toJSON() }
+   * Keeps an in-memory, append-only log of decisions with ISO-8601 timestamps.
+   */
+  function createAuditLog(opts) {
+    const now = (opts && opts.now) || (() => new Date());
+    const max = (opts && opts.max) || 1000;
+    let log = [];
+    return {
+      record(policy, call, result) {
+        const entry = {
+          seq: log.length ? log[log.length - 1].seq + 1 : 1,
+          timestamp: new Date(now()).toISOString(),
+          policy: (policy && policy.name) || null,
+          tool: call && call.tool,
+          args: JSON.parse(JSON.stringify((call && call.args) || {})),
+          decision: result.decision, rule: result.rule, reason: result.reason,
+        };
+        log.push(entry); if (log.length > max) log = log.slice(-max);
+        return entry;
+      },
+      evaluate(policy, call) { const r = evaluate(policy, call); this.record(policy, call, r); return r; },
+      entries() { return log.slice(); },
+      clear() { log = []; },
+      toJSON() { return { exportedAt: new Date(now()).toISOString(), count: log.length, entries: log.slice() }; },
+    };
+  }
+
+  function serializePolicy(policy, format) {
+    return format === 'json' ? JSON.stringify(policy, null, 2) + '\n' : toYaml(policy);
+  }
+
+  const api = { evaluate, validatePolicy, parsePolicy, parseYaml, toYaml, serializePolicy, createAuditLog, globToRegExp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ToolFence = api;
 })(typeof window !== 'undefined' ? window : globalThis);

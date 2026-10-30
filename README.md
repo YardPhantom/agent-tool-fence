@@ -43,6 +43,19 @@ node cli.js policies/guest.yaml '{"tool":"email.read","args":{}}'   # exit 1 on 
 ```
 To deep-link the demo, use `http://localhost:4173/#as=owner&call=6`.
 
+## Audit log and policy import/export
+The demo keeps an in-memory audit log of every decision (ISO-8601 timestamp, policy, tool, args, decision, matched rule, reason). **Download audit JSON** saves it; **Clear** empties it. **Import policy…** loads a `.yaml`/`.yml`/`.json` file into the editor (validated first), and **Export YAML** / **Export JSON** save the current policy.
+
+The same pieces are in the library:
+
+```js
+const { createAuditLog, serializePolicy } = require('agent-tool-fence');
+const audit = createAuditLog({ max: 1000 });      // bounded, in memory
+audit.evaluate(policy, { tool: 'web.search', args: { query: 'x' } });
+fs.writeFileSync('audit.json', JSON.stringify(audit.toJSON(), null, 2));
+fs.writeFileSync('policy.yaml', serializePolicy(policy, 'yaml')); // or 'json'
+```
+
 ## Use as a library
 ```js
 const { parsePolicy, evaluate } = require('./src/fence');
