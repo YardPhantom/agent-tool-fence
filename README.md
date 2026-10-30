@@ -56,6 +56,19 @@ fs.writeFileSync('audit.json', JSON.stringify(audit.toJSON(), null, 2));
 fs.writeFileSync('policy.yaml', serializePolicy(policy, 'yaml')); // or 'json'
 ```
 
+## Batch dry-run
+
+Simulate a whole batch of proposed tool calls (JSONL, one call per line; blank lines and `#` comments are skipped) against a policy before you ship it. Nothing is executed.
+
+```
+$ node cli.js simulate policies/owner.json policies/sample-batch.jsonl
+line  tool               decision  rule                  reason
+...
+policy owner: 11 calls — 6 allow, 3 confirm, 2 deny
+```
+
+Add `--json` for machine-readable output, or pass `-` to read the batch from stdin. Exit code is `0` if everything is allowed or needs confirmation, `1` if any call is denied, `2` if a line is not valid JSON — handy as a CI gate for policy changes. In the demo, use **Simulate batch** (or **Load JSONL…**). Library: `simulateBatch(policy, jsonlTextOrArray)` and `formatSimulation(result)`.
+
 ## Use as a library
 ```js
 const { parsePolicy, evaluate } = require('./src/fence');

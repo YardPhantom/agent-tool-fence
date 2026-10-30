@@ -1,0 +1,12 @@
+# One proposed tool call per line. Blank lines and # comments are ignored.
+{"tool":"web.search","args":{"query":"weather vancouver"}}
+{"tool":"web.fetch","args":{"url":"https://example.com"}}
+{"tool":"calendar.freebusy","args":{"days":7}}
+{"tool":"calendar.freebusy","args":{"days":60}}
+{"tool":"email.read","args":{}}
+{"tool":"email.send","args":{"to":"a@b.com","subject":"hi","body":"hello"}}
+{"tool":"shell.exec","args":{"cmd":"ls -la"}}
+{"tool":"shell.exec","args":{"cmd":"npm publish"}}
+{"tool":"shell.exec","args":{"cmd":"rm -rf /"}}
+{"tool":"payments.charge","args":{"amountUsd":40,"merchant":"coffee"}}
+{"tool":"payments.charge","args":{"amountUsd":900,"merchant":"laptop"}}
