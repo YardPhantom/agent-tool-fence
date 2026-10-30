@@ -54,3 +54,23 @@ test('audit log is bounded', () => {
   for (let i = 0; i < 5; i++) log.evaluate(owner, { tool: 'web.fetch', args: {} });
   assert.deepStrictEqual(log.entries().map((x) => x.seq), [3, 4, 5]);
 });
+
+test('simulateBatch summarizes a JSONL batch without executing', () => {
+  const { simulateBatch, formatSimulation } = require('../src/fence');
+  const text = fs.readFileSync(path.join(__dirname, '..', 'policies', 'sample-batch.jsonl'), 'utf8') + '\nnot json\n\n# c\n';
+  const sim = simulateBatch(owner, text);
+  assert.equal(sim.summary.total, 12); assert.equal(sim.summary.errors, 1);
+  assert.equal(sim.summary.allow + sim.summary.deny + sim.summary.confirm, 12);
+  assert.equal(sim.results.find((r) => r.tool === 'shell.exec' && r.line === 10).decision, 'deny');
+  assert.equal(sim.byTool['payments.charge'].confirm, 1); assert.equal(sim.byTool['payments.charge'].deny, 1);
+  const g = simulateBatch(guest, [{ tool: 'web.search', args: { query: 'x' } }, { tool: 'shell.exec', args: { cmd: 'ls' } }]);
+  assert.deepStrictEqual([g.summary.allow, g.summary.deny], [1, 1]);
+  const t = formatSimulation(sim); assert.match(t, /^line\s+tool\s+decision/); assert.match(t, /12 calls/);
+});
+test('cli simulate exits non-zero when anything is denied', () => {
+  const { spawnSync } = require('child_process'); const root = path.join(__dirname, '..');
+  const r = spawnSync(process.execPath, ['cli.js', 'simulate', 'policies/owner.json', 'policies/sample-batch.jsonl'], { cwd: root, encoding: 'utf8' });
+  assert.equal(r.status, 1); assert.match(r.stdout, /11 calls/);
+  const j = spawnSync(process.execPath, ['cli.js', 'simulate', 'policies/owner.json', '-', '--json'], { cwd: root, encoding: 'utf8', input: '{"tool":"web.search","args":{"query":"q"}}\n' });
+  assert.equal(j.status, 0); assert.equal(JSON.parse(j.stdout).summary.allow, 1);
+});

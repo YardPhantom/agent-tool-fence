@@ -172,6 +172,37 @@
     return format === 'json' ? JSON.stringify(policy, null, 2) + '\n' : toYaml(policy);
   }
 
-  const api = { evaluate, validatePolicy, parsePolicy, parseYaml, toYaml, serializePolicy, createAuditLog, globToRegExp };
+  // Dry-run a batch of calls (JSONL text or array) against a policy. Never executes anything.
+  function simulateBatch(policy, input) {
+    const items = [];
+    if (Array.isArray(input)) input.forEach((c, i) => items.push({ line: i + 1, call: c }));
+    else String(input || '').split(/\r?\n/).forEach((raw, i) => {
+      const t = raw.trim(); if (!t || t.startsWith('#') || t.startsWith('//')) return;
+      try { items.push({ line: i + 1, call: JSON.parse(t) }); } catch (e) { items.push({ line: i + 1, error: 'invalid JSON: ' + e.message }); }
+    });
+    const results = items.map(({ line, call, error }) => {
+      if (error) return { line, tool: null, decision: 'deny', rule: null, reason: error, error: true };
+      const r = evaluate(policy, call);
+      return { line, tool: call && call.tool, decision: r.decision, rule: r.rule, reason: r.reason };
+    });
+    const summary = { total: results.length, allow: 0, deny: 0, confirm: 0, errors: 0 };
+    results.forEach((r) => { summary[r.decision]++; if (r.error) summary.errors++; });
+    const byTool = {};
+    results.forEach((r) => { const k = r.tool || '(invalid)'; const b = byTool[k] || (byTool[k] = { allow: 0, deny: 0, confirm: 0 }); b[r.decision]++; });
+    return { policy: (policy && policy.name) || null, summary, byTool, results };
+  }
+
+  function formatSimulation(sim) {
+    const rows = [['line', 'tool', 'decision', 'rule', 'reason']].concat(sim.results.map((r) =>
+      [String(r.line), String(r.tool || '(invalid)'), r.decision.toUpperCase(), String(r.rule || '-'), String(r.reason || '')]));
+    const w = rows[0].map((_, c) => Math.min(60, Math.max(...rows.map((r) => r[c].length))));
+    const fmt = (r) => r.map((v, c) => (v.length > w[c] ? v.slice(0, w[c] - 1) + '\u2026' : v).padEnd(w[c])).join('  ').trimEnd();
+    const out = [fmt(rows[0]), w.map((n) => '-'.repeat(n)).join('  ')].concat(rows.slice(1).map(fmt));
+    const s = sim.summary;
+    out.push('', `policy ${sim.policy || '(unnamed)'}: ${s.total} calls \u2014 ${s.allow} allow, ${s.confirm} confirm, ${s.deny} deny` + (s.errors ? ` (${s.errors} invalid lines)` : ''));
+    return out.join('\n') + '\n';
+  }
+
+  const api = { evaluate, validatePolicy, parsePolicy, parseYaml, toYaml, serializePolicy, createAuditLog, globToRegExp, simulateBatch, formatSimulation };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ToolFence = api;
 })(typeof window !== 'undefined' ? window : globalThis);

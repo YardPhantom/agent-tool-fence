@@ -2,7 +2,7 @@
 // Tiny static server: serves public/ plus policies/ at /policies. No dependencies.
 const http = require('http'), fs = require('fs'), path = require('path');
 const PORT = Number(process.env.PORT) || 4173;
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.yaml': 'text/yaml', '.css': 'text/css' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.yaml': 'text/yaml', '.css': 'text/css', '.jsonl': 'text/plain' };
 http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/index.html';

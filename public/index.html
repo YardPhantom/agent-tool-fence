@@ -14,7 +14,7 @@ textarea{min-height:140px}#policyText{min-height:380px}
 #verdict{font-size:28px;font-weight:700;letter-spacing:1px}.allow{color:var(--ok)}.deny{color:var(--no)}.confirm{color:var(--ask)}
 #reason{color:var(--fg)}#rule{color:var(--mut);font-size:13px}
 button.btn{background:#0b0d12;color:var(--fg);border:1px solid #2c3140;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;margin:8px 6px 0 0}button.btn:hover{border-color:var(--acc)}
-.full{grid-column:1/-1}#audit{width:100%;border-collapse:collapse;font:12px ui-monospace,monospace}#audit td,#audit th{text-align:left;padding:4px 8px;border-bottom:1px solid #262a36;vertical-align:top}#audit th{color:var(--mut);font-weight:500}#auditWrap{max-height:260px;overflow:auto}
+.full{grid-column:1/-1}#sim,#audit{width:100%;border-collapse:collapse;font:12px ui-monospace,monospace}#sim td,#sim th,#audit td,#audit th{text-align:left;padding:4px 8px;border-bottom:1px solid #262a36;vertical-align:top}#sim th,#audit th{color:var(--mut);font-weight:500}#auditWrap{max-height:260px;overflow:auto}
 footer{padding:16px 32px;color:var(--mut);font-size:13px}a{color:var(--acc)}
 @media(max-width:900px){main{grid-template-columns:1fr}}
 </style></head><body>
@@ -29,6 +29,12 @@ footer{padding:16px 32px;color:var(--mut);font-size:13px}a{color:var(--acc)}
 </section>
 <section class="card"><label for="policyText">Active policy (YAML or JSON, editable)</label><textarea id="policyText"></textarea><div id="perr" class="deny"></div>
   <div><button class="btn" id="importBtn">Import policy…</button><button class="btn" id="exportYaml">Export YAML</button><button class="btn" id="exportJson">Export JSON</button><input type="file" id="importFile" accept=".json,.yaml,.yml,application/json,text/yaml" hidden></div>
+</section>
+<section class="card full"><label for="batchText">Batch dry-run — one call per line (JSONL), simulated against the active policy; nothing is executed</label>
+  <textarea id="batchText" style="min-height:120px"></textarea>
+  <button class="btn" id="simBtn">Simulate batch</button><button class="btn" id="batchFileBtn">Load JSONL…</button><input type="file" id="batchFile" accept=".jsonl,.json,.txt" hidden>
+  <div id="simSummary" style="margin:10px 0 6px"></div>
+  <div id="simWrap" style="max-height:320px;overflow:auto"><table id="sim" class="tbl"><thead><tr><th>line</th><th>tool</th><th>decision</th><th>rule</th><th>reason</th></tr></thead><tbody></tbody></table></div>
 </section>
 <section class="card full"><label>Audit log (this session, in memory)</label>
   <div id="auditWrap"><table id="audit"><thead><tr><th>#</th><th>time</th><th>policy</th><th>tool</th><th>decision</th><th>rule / reason</th></tr></thead><tbody></tbody></table></div>
@@ -75,5 +81,11 @@ $('#auditClear').onclick=()=>{audit.clear();renderAudit()};
 $('#sample').onchange=e=>pick(+e.target.value);$('#callText').oninput=run;
 $('#policyText').oninput=()=>{texts[who]=$('#policyText').value;run()};
 document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>setWho(b.dataset.p));
-load();
+async function loadBatch(){$('#batchText').value=await (await fetch('batch.jsonl')).text()}
+function simulate(){const p=currentPolicy();if(!p)return;const sim=ToolFence.simulateBatch(p,$('#batchText').value);const s=sim.summary;
+  $('#simSummary').innerHTML=`<b>${s.total}</b> calls vs <b>${esc(sim.policy||who)}</b>: <span class="allow">${s.allow} allow</span> · <span class="confirm">${s.confirm} confirm</span> · <span class="deny">${s.deny} deny</span>`+(s.errors?` <span class="deny">(${s.errors} invalid lines)</span>`:'');
+  $('#sim tbody').innerHTML=sim.results.map(r=>`<tr><td>${r.line}</td><td>${esc(r.tool||'(invalid)')}</td><td class="${r.decision}">${r.decision.toUpperCase()}</td><td>${esc(r.rule||'—')}</td><td>${esc(r.reason)}</td></tr>`).join('')}
+$('#simBtn').onclick=simulate;$('#batchFileBtn').onclick=()=>$('#batchFile').click();
+$('#batchFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('#batchText').value=await f.text();e.target.value='';simulate()};
+load().then(loadBatch).then(()=>{if(new URLSearchParams(location.hash.slice(1)).has('simulate'))simulate()});
 </script></body></html>
